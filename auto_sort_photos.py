@@ -7,11 +7,15 @@ from watchdog.observers import Observer
 from watchdog.events import PatternMatchingEventHandler
 import re
 from pathlib import Path
+import exifread
+from PIL import Image
+from datetime import datetime
 
 track_path = "/home/renee/Pictures/"
 
 def main():
     print("Sort photos from camera")
+#    patterns = [".nef", ".jpeg", ".jpg", ".raw", ".NEF", ".JPG"]
     patterns = "*"
     ignore_patterns = ""
     ignore_directories = False
@@ -20,7 +24,8 @@ def main():
     my_event_handler.on_created = on_created
     my_event_handler.on_moved = on_moved
     my_event_handler.on_deleted = on_deleted
-    go_recursively = True
+    my_event_handler.on_modified = on_modified
+    go_recursively = False
     my_observer = Observer()
     my_observer.schedule(my_event_handler, track_path, recursive=go_recursively)
     my_observer.start()
@@ -33,24 +38,23 @@ def main():
 
 def move_file(file):
     basefile = os.path.basename(file)
-    print("Move photo" + basefile)
-    create_date = os.path.getctime(file)
-    year = time.strftime('%Y', time.localtime(create_date))
+    create_date = creation_date(file)
+    year = create_date.strftime('%Y')
     print("Year: ", year)
-    month = time.strftime('%B', time.localtime(create_date))
+    month = create_date.strftime('%B')
     print("Month: ", month)
-    day = time.strftime('%d', time.localtime(create_date))
+    day = create_date.strftime('%d')
     print("Day: ", day)
     if not os.path.exists(track_path + year + "/" + month + "/" + day):
         os.makedirs(track_path + year + "/" + month + "/" + day)
     shutil.move(file, track_path + year + "/" + month + "/" + day + "/" + basefile)
 
 def creation_date(file):
-    stat = os.stat(file)
-    try:
-        return stat.st_birthtime
-    except AttributeError:
-        return stat.st_mtime
+    f = open(file, 'rb')
+    tags = exifread.process_file(f)
+    date_original = tags['EXIF DateTimeOriginal']
+    date_format = datetime.strptime(str(date_original), '%Y:%m:%d %H:%M:%S')
+    return date_format
 
 def on_created(event):
     file = event.src_path
@@ -63,5 +67,7 @@ def on_moved(event):
 def on_deleted(event):
     print(f"what the f**k! Someone deleted {event.src_path}!")
 
+def on_modified(event):
+    print(f"hey buddy, {event.src_path} has been modified")
 
 main()
